@@ -88,7 +88,7 @@ if __name__ == "__main__":
         # Generate a self-signed certificate if you don't have one:
         # openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        context.load_cert_chain(certfile="cert.pem", keyfile="key.pem")
+        context.load_cert_chain(certfile="/srv/cert.pem", keyfile="/srv/key.pem")
         httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
         httpd.serve_forever()
     else:
