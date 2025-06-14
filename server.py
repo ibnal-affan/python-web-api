@@ -1,4 +1,4 @@
-# Unified HTTP/HTTPS API using http.server and ssl (no external dependencies)
+# Unified HTTP/HTTPS API
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import socket
 import time
@@ -85,8 +85,6 @@ if __name__ == "__main__":
         port = HTTPS_PORT
         print(f"Starting HTTPS server on {HOST}:{port}")
         httpd = HTTPServer((HOST, port), SimpleHandler)
-        # Generate a self-signed certificate if you don't have one:
-        # openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.load_cert_chain(certfile="/srv/cert.pem", keyfile="/srv/key.pem")
         httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
