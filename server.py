@@ -8,8 +8,8 @@ import ssl
 import sys
 
 HOST = "0.0.0.0"
-HTTP_PORT = 8080
-HTTPS_PORT = 8443
+HTTP_PORT = 80
+HTTPS_PORT = 443
 start_time = time.time()
 
 class SimpleHandler(BaseHTTPRequestHandler):
@@ -21,34 +21,54 @@ class SimpleHandler(BaseHTTPRequestHandler):
             self.end_headers()
         elif self.path == "/health":
             print("Responding with healthcheck")
+            response = json.dumps({"status": "ok"}).encode()
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(response)))
             self.end_headers()
-            self.wfile.write(json.dumps({"status": "ok"}).encode())
+            self.wfile.write(response)
         elif self.path == "/status":
-            print("Fetching AWS instance_id and local IP")
+            print("Fetching AWS instance_id and local IP (IMDSv2)")
+            instance_id = "not available"
             try:
-                with urllib.request.urlopen("http://169.254.169.254/latest/meta-data/instance-id", timeout=1) as response:
-                    instance_id = response.read().decode()
+                # Step 1: Get IMDSv2 token
+                req_token = urllib.request.Request(
+                    "http://169.254.169.254/latest/api/token",
+                    method="PUT",
+                    headers={"X-aws-ec2-metadata-token-ttl-seconds": "21600"}
+                )
+                with urllib.request.urlopen(req_token, timeout=1) as token_response:
+                    token = token_response.read().decode()
+                # Step 2: Use token to get instance-id
+                req_id = urllib.request.Request(
+                    "http://169.254.169.254/latest/meta-data/instance-id",
+                    headers={"X-aws-ec2-metadata-token": token}
+                )
+                with urllib.request.urlopen(req_id, timeout=1) as response_id:
+                    instance_id = response_id.read().decode()
             except Exception as e:
-                print(f"Error fetching instance_id: {e}")
+                print(f"Error fetching instance_id (IMDSv2): {e}")
                 instance_id = "not available"
             try:
                 local_ip = socket.gethostbyname(socket.gethostname())
             except Exception as e:
                 print(f"Error fetching local IP: {e}")
                 local_ip = "not available"
+            response = json.dumps({"instance_id": instance_id, "local_ip": local_ip}).encode()
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(response)))
             self.end_headers()
-            self.wfile.write(json.dumps({"instance_id": instance_id, "local_ip": local_ip}).encode())
+            self.wfile.write(response)
         elif self.path == "/uptime":
             uptime_seconds = int(time.time() - start_time)
             print(f"Reporting uptime: {uptime_seconds} seconds")
+            response = json.dumps({"uptime_seconds": uptime_seconds}).encode()
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(response)))
             self.end_headers()
-            self.wfile.write(json.dumps({"uptime_seconds": uptime_seconds}).encode())
+            self.wfile.write(response)
         else:
             print(f"404 Not Found: {self.path}")
             self.send_response(404)
