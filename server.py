@@ -1,13 +1,15 @@
-# http_server.py
-# Simple HTTP API using http.server (no external dependencies)
+# Unified HTTP/HTTPS API using http.server and ssl (no external dependencies)
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import socket
 import time
 import json
 import urllib.request
+import ssl
+import sys
 
 HOST = "0.0.0.0"
-PORT = 8080
+HTTP_PORT = 8080
+HTTPS_PORT = 8443
 start_time = time.time()
 
 class SimpleHandler(BaseHTTPRequestHandler):
@@ -53,10 +55,24 @@ class SimpleHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def log_message(self, format, *args):
-        # Print all log messages to the console
         print(f"Server log: {format % args}")
 
 if __name__ == "__main__":
-    print(f"Starting HTTP server on {HOST}:{PORT}")
-    httpd = HTTPServer((HOST, PORT), SimpleHandler)
-    httpd.serve_forever()
+    mode = "http"
+    if len(sys.argv) > 1:
+        mode = sys.argv[1].lower()
+    if mode == "https":
+        port = HTTPS_PORT
+        print(f"Starting HTTPS server on {HOST}:{port}")
+        httpd = HTTPServer((HOST, port), SimpleHandler)
+        # Generate a self-signed certificate if you don't have one:
+        # openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(certfile="cert.pem", keyfile="key.pem")
+        httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
+        httpd.serve_forever()
+    else:
+        port = HTTP_PORT
+        print(f"Starting HTTP server on {HOST}:{port}")
+        httpd = HTTPServer((HOST, port), SimpleHandler)
+        httpd.serve_forever()
