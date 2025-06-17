@@ -12,6 +12,32 @@ HTTP_PORT = 80
 HTTPS_PORT = 443
 start_time = time.time()
 
+# Fetch AWS instance-id and local IP at server startup
+try:
+    # Step 1: Get IMDSv2 token
+    req_token = urllib.request.Request(
+        "http://169.254.169.254/latest/api/token",
+        method="PUT",
+        headers={"X-aws-ec2-metadata-token-ttl-seconds": "21600"}
+    )
+    with urllib.request.urlopen(req_token, timeout=1) as token_response:
+        aws_token = token_response.read().decode()
+    # Step 2: Use token to get instance-id
+    req_id = urllib.request.Request(
+        "http://169.254.169.254/latest/meta-data/instance-id",
+        headers={"X-aws-ec2-metadata-token": aws_token}
+    )
+    with urllib.request.urlopen(req_id, timeout=1) as response_id:
+        instance_id = response_id.read().decode()
+except Exception as e:
+    print(f"Error fetching instance_id (IMDSv2) at startup: {e}")
+    instance_id = "not available"
+try:
+    local_ip = socket.gethostbyname(socket.gethostname())
+except Exception as e:
+    print(f"Error fetching local IP at startup: {e}")
+    local_ip = "not available"
+
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         print(f"Received GET request: {self.path} from {self.client_address}")
@@ -28,32 +54,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(response)
         elif self.path == "/status":
-            print("Fetching AWS instance_id and local IP (IMDSv2)")
-            instance_id = "not available"
-            try:
-                # Step 1: Get IMDSv2 token
-                req_token = urllib.request.Request(
-                    "http://169.254.169.254/latest/api/token",
-                    method="PUT",
-                    headers={"X-aws-ec2-metadata-token-ttl-seconds": "21600"}
-                )
-                with urllib.request.urlopen(req_token, timeout=1) as token_response:
-                    token = token_response.read().decode()
-                # Step 2: Use token to get instance-id
-                req_id = urllib.request.Request(
-                    "http://169.254.169.254/latest/meta-data/instance-id",
-                    headers={"X-aws-ec2-metadata-token": token}
-                )
-                with urllib.request.urlopen(req_id, timeout=1) as response_id:
-                    instance_id = response_id.read().decode()
-            except Exception as e:
-                print(f"Error fetching instance_id (IMDSv2): {e}")
-                instance_id = "not available"
-            try:
-                local_ip = socket.gethostbyname(socket.gethostname())
-            except Exception as e:
-                print(f"Error fetching local IP: {e}")
-                local_ip = "not available"
+            print("Serving cached AWS instance_id and local IP (from startup)")
             response = json.dumps({"instance_id": instance_id, "local_ip": local_ip}).encode()
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
